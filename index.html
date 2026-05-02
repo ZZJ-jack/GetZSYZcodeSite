@@ -6,13 +6,8 @@
     <title>Gitee代码获取（luogu）</title>
     <style>
         :root {
-            --bg: #f0f2f5;
-            --card-bg: #ffffff;
             --primary: #4f46e5;
             --primary-hover: #4338ca;
-            --text: #1f2937;
-            --text-light: #6b7280;
-            --border: #e5e7eb;
             --code-bg: #1e1e1e;
             --code-text: #d4d4d4;
             --radius: 12px;
@@ -24,48 +19,59 @@
             box-sizing: border-box;
         }
 
+        /* 页面锁定，无整体滚动 */
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: var(--bg);
+            background: #f0f2f5;
             display: flex;
             justify-content: center;
-            align-items: flex-start;
-            min-height: 100vh;
-            padding: 2rem 1rem;
+            align-items: center;
+            padding: 0 1rem;
         }
 
         .container {
             width: 100%;
             max-width: 900px;
-            background: var(--card-bg);
-            border-radius: var(--radius);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-            padding: 2rem;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+            border-radius: 0;          /* 全高度时圆角可能不协调，可保留或去掉 */
+            padding: 2rem 2rem 0 2rem; /* 底部不 padding，让代码框贴底 */
+            overflow: hidden;
         }
 
         h1 {
             font-size: 1.75rem;
             font-weight: 700;
-            color: var(--text);
+            color: #1f2937;
             margin-bottom: 0.5rem;
+            flex-shrink: 0;
         }
 
         .subtitle {
-            color: var(--text-light);
+            color: #6b7280;
             font-size: 0.95rem;
             margin-bottom: 1.5rem;
+            flex-shrink: 0;
         }
 
         .search-box {
             display: flex;
             gap: 0.75rem;
             margin-bottom: 1.5rem;
+            flex-shrink: 0;
         }
 
         input[type="text"] {
             flex: 1;
             padding: 0.75rem 1rem;
-            border: 1px solid var(--border);
+            border: 1px solid #e5e7eb;
             border-radius: var(--radius);
             font-size: 1rem;
             outline: none;
@@ -99,13 +105,15 @@
             cursor: not-allowed;
         }
 
+        /* 代码容器：自动撑满剩余高度 */
         .code-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
             background: var(--code-bg);
-            border-radius: var(--radius);
+            border-radius: var(--radius) var(--radius) 0 0; /* 底部贴边无圆角 */
             overflow: hidden;
-            /* 增大代码框高度 */
-            min-height: 400px;
-            max-height: 70vh;
+            min-height: 0; /* 允许收缩 */
         }
 
         .code-header {
@@ -117,6 +125,7 @@
             color: #ccc;
             font-size: 0.85rem;
             font-weight: 500;
+            flex-shrink: 0;
         }
 
         .copy-btn {
@@ -135,35 +144,36 @@
             color: white;
         }
 
+        /* 代码框独占滚动 */
         pre {
             margin: 0;
             padding: 1rem;
-            overflow-x: auto;
+            overflow: auto;           /* 滚动 */
+            flex: 1;
             color: var(--code-text);
             font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
             font-size: 0.95rem;
             line-height: 1.6;
-            min-height: 300px;
-            display: flex;
-            align-items: flex-start;
-        }
-
-        code {
-            font-family: inherit;
             white-space: pre-wrap;
             word-break: break-word;
         }
 
-        .not-found {
+        code {
+            font-family: inherit;
+            white-space: inherit;
+        }
+
+        .not-found-text {
             color: #ef4444;
             font-size: 1.1rem;
             text-align: center;
             padding: 3rem 1rem;
         }
 
+        /* 移动端适配 */
         @media (max-width: 600px) {
             .container {
-                padding: 1.5rem;
+                padding: 1rem 1rem 0 1rem;
             }
             .search-box {
                 flex-direction: column;
@@ -206,64 +216,48 @@
         const fileName = document.getElementById('fileName');
         const copyBtn = document.getElementById('copyBtn');
 
-        // 回车触发查询
         codeInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') fetchCode();
         });
-
         fetchBtn.addEventListener('click', fetchCode);
 
-        // 显示代码
         function showCode(text, filename) {
             codeContent.style.color = '#d4d4d4';
             codeContent.textContent = text;
             fileName.textContent = filename || `${codeInput.value.trim()}.cpp`;
-            codeContainer.style.display = 'block';
+            codeContainer.style.display = 'flex';
         }
 
-        // 显示“找不到”提示
         function showNotFound() {
             codeContent.style.color = '#ef4444';
             codeContent.textContent = '找不到';
             fileName.textContent = '';
-            codeContainer.style.display = 'block';
+            codeContainer.style.display = 'flex';
         }
 
-        // 主请求函数
         async function fetchCode() {
             const code = codeInput.value.trim();
             if (!code) {
-                showNotFound();  // 空输入也显示“找不到”
+                showNotFound();
                 return;
             }
-
             fetchBtn.disabled = true;
             codeInput.disabled = true;
-
             try {
                 const response = await fetch(`${WORKER_URL}/?code=${encodeURIComponent(code)}`);
                 const text = await response.text();
-
-                // 先尝试解析 JSON（Worker 错误响应）
                 try {
                     const data = JSON.parse(text);
                     if (data.error) {
                         showNotFound();
                         return;
                     }
-                } catch (e) {
-                    // 不是 JSON，继续
-                }
-
-                // 如果响应内容本身就包含错误字符串（双保险）
+                } catch (e) {}
                 if (text.includes('Repository or file not found')) {
                     showNotFound();
                     return;
                 }
-
-                // 正常代码
                 showCode(text, `${code}.cpp`);
-
             } catch (error) {
                 showNotFound();
             } finally {
@@ -272,7 +266,6 @@
             }
         }
 
-        // 复制代码功能
         copyBtn.addEventListener('click', async () => {
             const code = codeContent.textContent;
             if (!code || code === '找不到') return;
@@ -292,7 +285,6 @@
             }
         });
 
-        // 自动聚焦
         codeInput.focus();
     </script>
 </body>
