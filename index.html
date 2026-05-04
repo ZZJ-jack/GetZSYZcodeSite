@@ -19,7 +19,6 @@
             box-sizing: border-box;
         }
 
-        /* 页面锁定，无整体滚动 */
         html, body {
             height: 100%;
             overflow: hidden;
@@ -41,8 +40,8 @@
             display: flex;
             flex-direction: column;
             background: #ffffff;
-            border-radius: 0;          /* 全高度时圆角不协调，保留直角 */
-            padding: 2rem 2rem 1.5rem 2rem; /* 底部留白，避免代码框贴边 */
+            border-radius: 0;
+            padding: 2rem 2rem 1.5rem 2rem;
             overflow: hidden;
         }
 
@@ -105,15 +104,14 @@
             cursor: not-allowed;
         }
 
-        /* 代码容器：自动撑满剩余高度 */
         .code-container {
             flex: 1;
             display: flex;
             flex-direction: column;
             background: var(--code-bg);
-            border-radius: var(--radius);   /* 四个角都有圆角，底部不再贴边 */
+            border-radius: var(--radius);
             overflow: hidden;
-            min-height: 0; /* 允许收缩 */
+            min-height: 0;
         }
 
         .code-header {
@@ -144,11 +142,10 @@
             color: white;
         }
 
-        /* 代码框独占滚动 */
         pre {
             margin: 0;
             padding: 1rem;
-            overflow: auto;           /* 滚动 */
+            overflow: auto;
             flex: 1;
             color: var(--code-text);
             font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
@@ -163,16 +160,30 @@
             white-space: inherit;
         }
 
-        /* 美化的未找到提示 */
-        .not-found-wrapper {
+        /* 加载与提示样式 */
+        .status-wrapper {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100%;
-            color: #f87171;
-            gap: 0.5rem;
+            color: #d4d4d4;
+            gap: 0.75rem;
         }
+
+        .loader {
+            width: 32px;
+            height: 32px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         .not-found-icon {
             font-size: 3rem;
             margin-bottom: 0.5rem;
@@ -180,13 +191,13 @@
         .not-found-title {
             font-size: 1.2rem;
             font-weight: 600;
+            color: #f87171;
         }
         .not-found-sub {
             color: #9ca3af;
             font-size: 0.9rem;
         }
 
-        /* 移动端适配 */
         @media (max-width: 600px) {
             .container {
                 padding: 1rem 1rem 1rem 1rem;
@@ -203,144 +214,183 @@
 <body>
     <div class="container">
         <h1>📄 Gitee代码获取（luogu）</h1>
-        <p class="subtitle">输入洛谷题号，获取对应 C++ 代码</p>
+        <p class="subtitle">输入洛谷题号，获取对应 C++ 代码（三重来源保障）</p>
 
         <div class="search-box">
-            <input type="text" id="codeInput" placeholder="请输入luogu题号" />
-            <button id="fetchBtn">查询代码</button>
+            <input type="text" id="codeInput" placeholder="请输入luogu题号，例如 P1020" />
+            <button id="fetchBtn">🔍 查询代码</button>
         </div>
 
-        <!-- 代码显示区域（初始隐藏） -->
         <div id="codeContainer" class="code-container" style="display: none;">
             <div class="code-header">
                 <span id="fileName">code.cpp</span>
-                <button class="copy-btn" id="copyBtn">📋 复制</button>
+                <button class="copy-btn" id="copyBtn" style="display: none;">📋 复制</button>
             </div>
             <pre><code id="codeContent"></code></pre>
         </div>
     </div>
 
     <script>
-        // ================== 配置：主 API 和备用 API ==================
-        const PRIMARY_URL   = 'https://zsyzcodeedgeoneapi.zzjjack.us.kg';   // 主 API
-        const FALLBACK_URL  = 'https://getzsyzcodeapi.zzjjack.us.kg';       // 备用 API
-        // ================================================================
+        (function() {
+            // ================== 配置区 ==================
+            const PRIMARY_API   = 'https://zsyzcodeedgeoneapi.zzjjack.us.kg';   // 主 API
+            const FALLBACK_API  = 'https://getzsyzcodeapi.zzjjack.us.kg';       // 备用 API
+            const GITEE_RAW_BASE = 'https://raw.giteeusercontent.com/jimmyflower6/zsyz-jimmy/raw/master/code/';
+            const REQUEST_TIMEOUT = 15000;  // 单个请求超时时间（毫秒）
+            // ===========================================
 
-        const codeInput = document.getElementById('codeInput');
-        const fetchBtn = document.getElementById('fetchBtn');
-        const codeContainer = document.getElementById('codeContainer');
-        const codeContent = document.getElementById('codeContent');
-        const fileName = document.getElementById('fileName');
-        const copyBtn = document.getElementById('copyBtn');
+            const codeInput = document.getElementById('codeInput');
+            const fetchBtn = document.getElementById('fetchBtn');
+            const codeContainer = document.getElementById('codeContainer');
+            const codeContent = document.getElementById('codeContent');
+            const fileName = document.getElementById('fileName');
+            const copyBtn = document.getElementById('copyBtn');
 
-        codeInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') fetchCode();
-        });
-        fetchBtn.addEventListener('click', fetchCode);
+            // 事件绑定
+            codeInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') fetchCode();
+            });
+            fetchBtn.addEventListener('click', fetchCode);
 
-        // 向指定 API 请求代码，成功返回代码文本，失败返回 null
-        async function fetchFromUrl(url, code) {
-            try {
-                const response = await fetch(`${url}/?code=${encodeURIComponent(code)}`);
-                if (!response.ok) return null;
-                const text = await response.text();
-                // 根据常见错误特征判断是否未找到
-                if (text.includes('Repository or file not found') ||
-                    text.includes('not found') ||
-                    text.trim().toLowerCase().startsWith('error')) {
+            // 带超时的 fetch 封装
+            async function fetchWithTimeout(url, timeout = REQUEST_TIMEOUT) {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), timeout);
+                try {
+                    const response = await fetch(url, { signal: controller.signal });
+                    clearTimeout(timer);
+                    if (!response.ok) return null;
+                    const text = await response.text();
+                    // 判断是否为错误内容
+                    if (text.includes('Repository or file not found') ||
+                        text.includes('not found') ||
+                        text.trim().toLowerCase().startsWith('error')) {
+                        return null;
+                    }
+                    return text;
+                } catch (err) {
+                    clearTimeout(timer);
                     return null;
                 }
-                return text;
-            } catch (e) {
-                return null;
-            }
-        }
-
-        // 显示代码
-        function showCode(text, filename) {
-            // 恢复代码样式
-            codeContent.style.color = '#d4d4d4';
-            codeContent.innerHTML = '';          // 清除可能的 HTML
-            codeContent.textContent = text;
-            fileName.textContent = filename || `${codeInput.value.trim()}.cpp`;
-            copyBtn.style.display = 'inline-block';   // 显示复制按钮
-            codeContainer.style.display = 'flex';
-        }
-
-        // 显示美化的未找到提示
-        function showNotFound() {
-            codeContent.style.color = '#d4d4d4';
-            codeContent.innerHTML = `
-                <div class="not-found-wrapper">
-                    <div class="not-found-icon">😕</div>
-                    <div class="not-found-title">没有找到此题的代码</div>
-                    <div class="not-found-sub">请确认题号是否正确，或尝试其他题号</div>
-                </div>
-            `;
-            fileName.textContent = '未找到';
-            copyBtn.style.display = 'none';      // 隐藏复制按钮
-            codeContainer.style.display = 'flex';
-        }
-
-        // 主流程：优先主 API，失败再试备用 API
-        async function fetchCode() {
-            const code = codeInput.value.trim();
-            if (!code) {
-                showNotFound();
-                return;
             }
 
-            fetchBtn.disabled = true;
-            codeInput.disabled = true;
+            // 显示加载状态
+            function showLoading() {
+                codeContent.innerHTML = `
+                    <div class="status-wrapper">
+                        <div class="loader"></div>
+                        <span>正在获取代码，请稍候…</span>
+                    </div>
+                `;
+                fileName.textContent = '加载中...';
+                copyBtn.style.display = 'none';
+                codeContainer.style.display = 'flex';
+            }
 
-            try {
-                // 先尝试主 API
-                let codeText = await fetchFromUrl(PRIMARY_URL, code);
+            // 显示正常代码
+            function showCode(text, filename) {
+                codeContent.style.color = '#d4d4d4';
+                codeContent.textContent = text;
+                fileName.textContent = filename || `${codeInput.value.trim()}.cpp`;
+                copyBtn.style.display = 'inline-block';
+                codeContainer.style.display = 'flex';
+            }
 
-                // 若主 API 未成功，再尝试备用 API
-                if (!codeText) {
-                    codeText = await fetchFromUrl(FALLBACK_URL, code);
-                }
+            // 显示未找到的美化提示
+            function showNotFound() {
+                codeContent.innerHTML = `
+                    <div class="status-wrapper">
+                        <div class="not-found-icon">😕</div>
+                        <div class="not-found-title">没有找到此题的代码</div>
+                        <div class="not-found-sub">请确认题号是否正确，或稍后重试</div>
+                    </div>
+                `;
+                fileName.textContent = '未找到';
+                copyBtn.style.display = 'none';
+                codeContainer.style.display = 'flex';
+            }
 
-                if (codeText) {
-                    showCode(codeText, `${code}.cpp`);
-                } else {
+            // 主逻辑：顺序尝试三个来源
+            async function fetchCode() {
+                const code = codeInput.value.trim();
+                if (!code) {
                     showNotFound();
+                    return;
                 }
-            } catch (error) {
+
+                // 禁用按钮与输入
+                fetchBtn.disabled = true;
+                codeInput.disabled = true;
+                fetchBtn.textContent = '⏳ 查询中...';
+                showLoading();
+
+                let codeText = null;
+
+                // 1. 主 API
+                codeText = await fetchWithTimeout(`${PRIMARY_API}/?code=${encodeURIComponent(code)}`);
+                if (codeText) {
+                    finishWithCode(codeText, code);
+                    return;
+                }
+
+                // 2. 备用 API
+                codeText = await fetchWithTimeout(`${FALLBACK_API}/?code=${encodeURIComponent(code)}`);
+                if (codeText) {
+                    finishWithCode(codeText, code);
+                    return;
+                }
+
+                // 3. Gitee 原始文件直链（最终保底）
+                const rawUrl = `${GITEE_RAW_BASE}${encodeURIComponent(code)}.cpp`;
+                codeText = await fetchWithTimeout(rawUrl);
+                if (codeText) {
+                    finishWithCode(codeText, code);
+                    return;
+                }
+
+                // 全部失败
                 showNotFound();
-            } finally {
+                finishRequest();
+            }
+
+            function finishWithCode(text, code) {
+                showCode(text, `${code}.cpp`);
+                finishRequest();
+            }
+
+            function finishRequest() {
                 fetchBtn.disabled = false;
                 codeInput.disabled = false;
+                fetchBtn.textContent = '🔍 查询代码';
+                codeInput.focus();
             }
-        }
 
-        // 复制功能（仅当有有效代码时有效）
-        copyBtn.addEventListener('click', async () => {
-            // 如果当前是未找到状态（按钮已隐藏），则忽略点击
-            if (copyBtn.style.display === 'none') return;
+            // 复制功能（仅当按钮可见时有效）
+            copyBtn.addEventListener('click', async () => {
+                if (copyBtn.style.display === 'none') return;
+                const code = codeContent.textContent;
+                if (!code || code.trim() === '') return;
 
-            const code = codeContent.textContent;
-            if (!code || code.trim() === '') return;
+                try {
+                    await navigator.clipboard.writeText(code);
+                    copyBtn.textContent = '✅ 已复制';
+                    setTimeout(() => { copyBtn.textContent = '📋 复制'; }, 2000);
+                } catch (err) {
+                    // 降级方案
+                    const textarea = document.createElement('textarea');
+                    textarea.value = code;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    copyBtn.textContent = '✅ 已复制';
+                    setTimeout(() => { copyBtn.textContent = '📋 复制'; }, 2000);
+                }
+            });
 
-            try {
-                await navigator.clipboard.writeText(code);
-                copyBtn.textContent = '✅ 已复制';
-                setTimeout(() => { copyBtn.textContent = '📋 复制'; }, 2000);
-            } catch (err) {
-                // 降级方案
-                const textarea = document.createElement('textarea');
-                textarea.value = code;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-                copyBtn.textContent = '✅ 已复制';
-                setTimeout(() => { copyBtn.textContent = '📋 复制'; }, 2000);
-            }
-        });
-
-        codeInput.focus();
+            // 初始聚焦
+            codeInput.focus();
+        })();
     </script>
 </body>
 </html>
