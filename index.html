@@ -160,7 +160,6 @@
             white-space: inherit;
         }
 
-        /* 加载与提示样式 */
         .status-wrapper {
             display: flex;
             flex-direction: column;
@@ -214,7 +213,7 @@
 <body>
     <div class="container">
         <h1>📄 Gitee代码获取（luogu）</h1>
-        <p class="subtitle">输入洛谷题号，获取对应 C++ 代码（三重来源保障）</p>
+        <p class="subtitle">输入洛谷题号，获取对应 C++ 代码（多源自动切换）</p>
 
         <div class="search-box">
             <input type="text" id="codeInput" placeholder="请输入luogu题号，例如 P1020" />
@@ -232,12 +231,11 @@
 
     <script>
         (function() {
-            // ================== 配置区 ==================
-            const PRIMARY_API   = 'https://zsyzcodeedgeoneapi.zzjjack.us.kg';   // 主 API
-            const FALLBACK_API  = 'https://getzsyzcodeapi.zzjjack.us.kg';       // 备用 API
+            // 配置
+            const PRIMARY_API   = 'https://zsyzcodeedgeoneapi.zzjjack.us.kg';   // 主API（已修复CORS）
+            const FALLBACK_API  = 'https://getzsyzcodeapi.zzjjack.us.kg';       // 备用API
             const GITEE_RAW_BASE = 'https://raw.giteeusercontent.com/jimmyflower6/zsyz-jimmy/raw/master/code/';
-            const REQUEST_TIMEOUT = 15000;  // 单个请求超时时间（毫秒）
-            // ===========================================
+            const REQUEST_TIMEOUT = 15000;
 
             const codeInput = document.getElementById('codeInput');
             const fetchBtn = document.getElementById('fetchBtn');
@@ -246,13 +244,11 @@
             const fileName = document.getElementById('fileName');
             const copyBtn = document.getElementById('copyBtn');
 
-            // 事件绑定
             codeInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') fetchCode();
             });
             fetchBtn.addEventListener('click', fetchCode);
 
-            // 带超时的 fetch 封装
             async function fetchWithTimeout(url, timeout = REQUEST_TIMEOUT) {
                 const controller = new AbortController();
                 const timer = setTimeout(() => controller.abort(), timeout);
@@ -261,7 +257,6 @@
                     clearTimeout(timer);
                     if (!response.ok) return null;
                     const text = await response.text();
-                    // 判断是否为错误内容
                     if (text.includes('Repository or file not found') ||
                         text.includes('not found') ||
                         text.trim().toLowerCase().startsWith('error')) {
@@ -274,7 +269,6 @@
                 }
             }
 
-            // 显示加载状态
             function showLoading() {
                 codeContent.innerHTML = `
                     <div class="status-wrapper">
@@ -287,7 +281,6 @@
                 codeContainer.style.display = 'flex';
             }
 
-            // 显示正常代码
             function showCode(text, filename) {
                 codeContent.style.color = '#d4d4d4';
                 codeContent.textContent = text;
@@ -296,7 +289,6 @@
                 codeContainer.style.display = 'flex';
             }
 
-            // 显示未找到的美化提示
             function showNotFound() {
                 codeContent.innerHTML = `
                     <div class="status-wrapper">
@@ -310,7 +302,6 @@
                 codeContainer.style.display = 'flex';
             }
 
-            // 主逻辑：顺序尝试三个来源
             async function fetchCode() {
                 const code = codeInput.value.trim();
                 if (!code) {
@@ -318,7 +309,6 @@
                     return;
                 }
 
-                // 禁用按钮与输入
                 fetchBtn.disabled = true;
                 codeInput.disabled = true;
                 fetchBtn.textContent = '⏳ 查询中...';
@@ -326,7 +316,7 @@
 
                 let codeText = null;
 
-                // 1. 主 API
+                // 1. 主 API（现在已支持 CORS，通常最快）
                 codeText = await fetchWithTimeout(`${PRIMARY_API}/?code=${encodeURIComponent(code)}`);
                 if (codeText) {
                     finishWithCode(codeText, code);
@@ -340,7 +330,7 @@
                     return;
                 }
 
-                // 3. Gitee 原始文件直链（最终保底）
+                // 3. Gitee 直链
                 const rawUrl = `${GITEE_RAW_BASE}${encodeURIComponent(code)}.cpp`;
                 codeText = await fetchWithTimeout(rawUrl);
                 if (codeText) {
@@ -348,7 +338,6 @@
                     return;
                 }
 
-                // 全部失败
                 showNotFound();
                 finishRequest();
             }
@@ -365,7 +354,6 @@
                 codeInput.focus();
             }
 
-            // 复制功能（仅当按钮可见时有效）
             copyBtn.addEventListener('click', async () => {
                 if (copyBtn.style.display === 'none') return;
                 const code = codeContent.textContent;
@@ -376,7 +364,6 @@
                     copyBtn.textContent = '✅ 已复制';
                     setTimeout(() => { copyBtn.textContent = '📋 复制'; }, 2000);
                 } catch (err) {
-                    // 降级方案
                     const textarea = document.createElement('textarea');
                     textarea.value = code;
                     document.body.appendChild(textarea);
@@ -388,7 +375,6 @@
                 }
             });
 
-            // 初始聚焦
             codeInput.focus();
         })();
     </script>
