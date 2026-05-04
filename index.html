@@ -41,8 +41,8 @@
             display: flex;
             flex-direction: column;
             background: #ffffff;
-            border-radius: 0;          /* 全高度时圆角可能不协调，可保留或去掉 */
-            padding: 2rem 2rem 0 2rem; /* 底部不 padding，让代码框贴底 */
+            border-radius: 0;          /* 全高度时圆角不协调，保留直角 */
+            padding: 2rem 2rem 1.5rem 2rem; /* 底部留白，避免代码框贴边 */
             overflow: hidden;
         }
 
@@ -111,7 +111,7 @@
             display: flex;
             flex-direction: column;
             background: var(--code-bg);
-            border-radius: var(--radius) var(--radius) 0 0; /* 底部贴边无圆角 */
+            border-radius: var(--radius);   /* 四个角都有圆角，底部不再贴边 */
             overflow: hidden;
             min-height: 0; /* 允许收缩 */
         }
@@ -163,17 +163,33 @@
             white-space: inherit;
         }
 
-        .not-found-text {
-            color: #ef4444;
-            font-size: 1.1rem;
-            text-align: center;
-            padding: 3rem 1rem;
+        /* 美化的未找到提示 */
+        .not-found-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #f87171;
+            gap: 0.5rem;
+        }
+        .not-found-icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        .not-found-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        .not-found-sub {
+            color: #9ca3af;
+            font-size: 0.9rem;
         }
 
         /* 移动端适配 */
         @media (max-width: 600px) {
             .container {
-                padding: 1rem 1rem 0 1rem;
+                padding: 1rem 1rem 1rem 1rem;
             }
             .search-box {
                 flex-direction: column;
@@ -205,8 +221,9 @@
     </div>
 
     <script>
-        // ================== 配置：替换为你的 Worker 地址 ==================
-        const WORKER_URL = 'https://getzsyzcodeapi.zzjjack.us.kg';
+        // ================== 配置：主 API 和备用 API ==================
+        const PRIMARY_URL   = 'https://zsyzcodeedgeoneapi.zzjjack.us.kg';   // 主 API
+        const FALLBACK_URL  = 'https://getzsyzcodeapi.zzjjack.us.kg';       // 备用 API
         // ================================================================
 
         const codeInput = document.getElementById('codeInput');
@@ -221,43 +238,75 @@
         });
         fetchBtn.addEventListener('click', fetchCode);
 
+        // 向指定 API 请求代码，成功返回代码文本，失败返回 null
+        async function fetchFromUrl(url, code) {
+            try {
+                const response = await fetch(`${url}/?code=${encodeURIComponent(code)}`);
+                if (!response.ok) return null;
+                const text = await response.text();
+                // 根据常见错误特征判断是否未找到
+                if (text.includes('Repository or file not found') ||
+                    text.includes('not found') ||
+                    text.trim().toLowerCase().startsWith('error')) {
+                    return null;
+                }
+                return text;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // 显示代码
         function showCode(text, filename) {
+            // 恢复代码样式
             codeContent.style.color = '#d4d4d4';
+            codeContent.innerHTML = '';          // 清除可能的 HTML
             codeContent.textContent = text;
             fileName.textContent = filename || `${codeInput.value.trim()}.cpp`;
+            copyBtn.style.display = 'inline-block';   // 显示复制按钮
             codeContainer.style.display = 'flex';
         }
 
+        // 显示美化的未找到提示
         function showNotFound() {
-            codeContent.style.color = '#ef4444';
-            codeContent.textContent = '找不到';
-            fileName.textContent = '';
+            codeContent.style.color = '#d4d4d4';
+            codeContent.innerHTML = `
+                <div class="not-found-wrapper">
+                    <div class="not-found-icon">😕</div>
+                    <div class="not-found-title">没有找到此题的代码</div>
+                    <div class="not-found-sub">请确认题号是否正确，或尝试其他题号</div>
+                </div>
+            `;
+            fileName.textContent = '未找到';
+            copyBtn.style.display = 'none';      // 隐藏复制按钮
             codeContainer.style.display = 'flex';
         }
 
+        // 主流程：优先主 API，失败再试备用 API
         async function fetchCode() {
             const code = codeInput.value.trim();
             if (!code) {
                 showNotFound();
                 return;
             }
+
             fetchBtn.disabled = true;
             codeInput.disabled = true;
+
             try {
-                const response = await fetch(`${WORKER_URL}/?code=${encodeURIComponent(code)}`);
-                const text = await response.text();
-                try {
-                    const data = JSON.parse(text);
-                    if (data.error) {
-                        showNotFound();
-                        return;
-                    }
-                } catch (e) {}
-                if (text.includes('Repository or file not found')) {
-                    showNotFound();
-                    return;
+                // 先尝试主 API
+                let codeText = await fetchFromUrl(PRIMARY_URL, code);
+
+                // 若主 API 未成功，再尝试备用 API
+                if (!codeText) {
+                    codeText = await fetchFromUrl(FALLBACK_URL, code);
                 }
-                showCode(text, `${code}.cpp`);
+
+                if (codeText) {
+                    showCode(codeText, `${code}.cpp`);
+                } else {
+                    showNotFound();
+                }
             } catch (error) {
                 showNotFound();
             } finally {
@@ -266,14 +315,20 @@
             }
         }
 
+        // 复制功能（仅当有有效代码时有效）
         copyBtn.addEventListener('click', async () => {
+            // 如果当前是未找到状态（按钮已隐藏），则忽略点击
+            if (copyBtn.style.display === 'none') return;
+
             const code = codeContent.textContent;
-            if (!code || code === '找不到') return;
+            if (!code || code.trim() === '') return;
+
             try {
                 await navigator.clipboard.writeText(code);
                 copyBtn.textContent = '✅ 已复制';
                 setTimeout(() => { copyBtn.textContent = '📋 复制'; }, 2000);
             } catch (err) {
+                // 降级方案
                 const textarea = document.createElement('textarea');
                 textarea.value = code;
                 document.body.appendChild(textarea);
