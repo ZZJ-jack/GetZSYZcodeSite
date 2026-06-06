@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gitee代码获取（luogu）</title>
+    <title>ZZJ-JACK洛谷题号查询Gitee代码获取</title>
+    <meta name="description" content="输入洛谷题号（如 P1020），即可快速获取对应的 C++ 代码。采用双 API 并行请求，极致响应速度，支持一键复制代码。">
+    <meta name="keywords" content="洛谷,luogu,题号,代码查询,Gitee,C++代码,编程,算法">
+    <meta name="author" content="zzjjack">
 
     <!-- 🔗 预连接：提前建立到两个 API 的连接，减少后续请求延迟 -->
     <link rel="preconnect" href="https://zsyzcodeedgeoneapi.zzjjack.us.kg">
@@ -220,23 +223,23 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <main class="container">
         <h1>📄 Gitee代码获取（luogu）</h1>
         <p class="subtitle">输入洛谷题号，获取对应 C++ 代码（双 API 并行，极速响应）</p>
 
-        <div class="search-box">
-            <input type="text" id="codeInput" placeholder="请输入luogu题号，例如 P1020" />
-            <button id="fetchBtn">🔍 查询代码</button>
-        </div>
+        <section class="search-box">
+            <input type="text" id="codeInput" placeholder="请输入luogu题号，例如 P1020" aria-label="洛谷题号输入框" />
+            <button id="fetchBtn" aria-label="查询代码">🔍 查询代码</button>
+        </section>
 
-        <div id="codeContainer" class="code-container" style="display: none;">
+        <section id="codeContainer" class="code-container" style="display: none;" aria-live="polite">
             <div class="code-header">
                 <span id="fileName">code.cpp</span>
-                <button class="copy-btn" id="copyBtn" style="display: none;">📋 复制</button>
+                <button class="copy-btn" id="copyBtn" style="display: none;" aria-label="复制代码">📋 复制</button>
             </div>
             <pre><code id="codeContent"></code></pre>
-        </div>
-    </div>
+        </section>
+    </main>
 
     <script>
         (function() {
